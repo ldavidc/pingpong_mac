@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ping Pong Ball Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0f14;
+      --bg-card: #151a22;
+      --border: #2a3344;
+      --text: #e8edf5;
+      --muted: #8b98a8;
+      --accent: #3dff9a;
+      --accent-dim: #1a7a4a;
+      --warn: #ffb020;
+      --danger: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      background: radial-gradient(ellipse 120% 80% at 50% -20%, #1a2435 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.5rem;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      max-width: 36rem;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.35);
+    }
+    .video-wrap {
+      position: relative;
+      background: #000;
+      aspect-ratio: 16 / 10;
+      max-height: 70vh;
+    }
+    .video-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem 1rem;
+      padding: 1rem 1.25rem;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--border);
+      color: var(--muted);
+    }
+    .pill strong { color: var(--text); }
+    .pill.ok { background: rgba(61,255,154,0.12); color: var(--accent); }
+    .pill.ok strong { color: var(--accent); }
+    .pill.bad { background: rgba(255,107,107,0.12); color: var(--danger); }
+    .pill.warn { background: rgba(255,176,32,0.12); color: var(--warn); }
+    button {
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.55rem 1.1rem;
+      border-radius: 10px;
+      border: 1px solid var(--accent-dim);
+      background: linear-gradient(180deg, #1f3d2e 0%, #152a1f 100%);
+      color: var(--accent);
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.12s;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(61,255,154,0.15);
+    }
+    button:active { transform: translateY(0); }
+    footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Ping Pong Ball Tracker</h1>
+      <p class="sub">Live view from your Mac camera with HSV tracking + kinematics overlay. Allow camera access when the browser asks.</p>
+    </header>
+
+    <div class="card">
+      <div class="video-wrap">
+        <img id="feed" src="/stream" alt="Live tracking feed" />
+      </div>
+      <div class="toolbar">
+        <button type="button" id="resetBtn">Reset displacement origin</button>
+        <span class="pill" id="fpsPill">FPS: <strong>—</strong></span>
+        <span class="pill" id="statusPill">Status: <strong>—</strong></span>
+      </div>
+    </div>
+
+    <footer>
+      Served locally by FastAPI · <a href="/api/status">API status</a> JSON
+    </footer>
+  </div>
+
+  <script>
+    const feed = document.getElementById("feed");
+    const resetBtn = document.getElementById("resetBtn");
+    const fpsPill = document.getElementById("fpsPill");
+    const statusPill = document.getElementById("statusPill");
+
+    // MJPEG in <img> works in Chrome/Safari; add cache-bust on error
+    feed.onerror = () => {
+      feed.src = "/stream?t=" + Date.now();
+    };
+
+    async function pollStatus() {
+      try {
+        const r = await fetch("/api/status");
+        const d = await r.json();
+        fpsPill.querySelector("strong").textContent = d.fps;
+        const s = d.status;
+        const pill = statusPill;
+        pill.className = "pill";
+        pill.querySelector("strong").textContent = s;
+        if (s === "ok") pill.classList.add("ok");
+        else if (s === "rejected") pill.classList.add("warn");
+        else if (s === "eof") pill.classList.add("bad");
+      } catch (_) {}
+    }
+    setInterval(pollStatus, 500);
+
+    resetBtn.addEventListener("click", async () => {
+      try {
+        await fetch("/api/reset-origin", { method: "POST" });
+      } catch (_) {}
+    });
+  </script>
+</body>
+</html>
